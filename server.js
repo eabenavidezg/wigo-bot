@@ -196,7 +196,7 @@ async function procesarMensaje(message) {
 
     return sendText(
       telefono,
-      "👋 Bienvenido a WIGO.\n\n¿Cuál es tu nombre?"
+      "🚕 WIGO V2 ACTIVO\n\n¿Cuál es tu nombre?"
     );
   }
 
