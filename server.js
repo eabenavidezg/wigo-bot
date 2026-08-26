@@ -4,6 +4,8 @@ const app = express();
 
 const VERIFY_TOKEN = "wigo123";
 
+app.use(express.json());
+
 app.get("/", (req, res) => {
   res.send("WIGO Bot funcionando 🚖");
 });
@@ -18,6 +20,12 @@ app.get("/webhook", (req, res) => {
   }
 
   res.sendStatus(403);
+});
+
+app.post("/webhook", (req, res) => {
+  console.log(JSON.stringify(req.body, null, 2));
+
+  res.sendStatus(200);
 });
 
 const PORT = process.env.PORT || 3000;
