@@ -12,7 +12,7 @@ const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const usuarios = {};
 
 // =========================
-// ENVIO DE MENSAJES
+// MENSAJES
 // =========================
 
 async function enviarTexto(destino, mensaje) {
@@ -50,6 +50,33 @@ async function enviarBotones(destino, mensaje, botones) {
         },
         action: {
           buttons: botones
+        }
+      }
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${TOKEN}`,
+        "Content-Type": "application/json"
+      }
+    }
+  );
+}
+
+async function solicitarUbicacion(destino) {
+  await axios.post(
+    `https://graph.facebook.com/v23.0/${PHONE_NUMBER_ID}/messages`,
+    {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: destino,
+      type: "interactive",
+      interactive: {
+        type: "location_request_message",
+        body: {
+          text: "📍 ¿Dónde te recogemos?\n\nComparte tu ubicación para continuar con tu solicitud."
+        },
+        action: {
+          name: "send_location"
         }
       }
     },
@@ -145,7 +172,7 @@ Tus datos serán tratados únicamente para la prestación de nuestros servicios,
     }
 
     // =========================
-    // COMPARTIR CONTACTO
+    // CONTACTO
     // =========================
 
     if (
@@ -180,7 +207,7 @@ Todo empieza con un mensaje.`,
     }
 
     // =========================
-    // REGISTRARME
+    // REGISTRO
     // =========================
 
     if (
@@ -212,7 +239,7 @@ Confirma para seguir.`,
     }
 
     // =========================
-    // ACEPTO
+    // TERMINOS
     // =========================
 
     if (
@@ -307,79 +334,4 @@ Escribe "Menú" para ver más opciones.`,
 
       usuario.estado = "ubicacion";
 
-      await enviarTexto(
-        from,
-        `📍 ¿Dónde te recogemos?
-
-Por favor envía tu ubicación actual o comparte una dirección.
-
-Si no estás listo(a), escribe "Cancelar".`
-      );
-
-      return res.sendStatus(200);
-    }
-
-    // =========================
-    // CANCELAR
-    // =========================
-
-    if (
-      usuario.estado === "ubicacion" &&
-      texto.toLowerCase() === "cancelar"
-    ) {
-
-      usuario.estado = "registrado";
-
-      await enviarTexto(
-        from,
-        "✅ Solicitud cancelada."
-      );
-
-      return res.sendStatus(200);
-    }
-
-    // =========================
-    // UBICACION O DIRECCION
-    // =========================
-
-    if (
-      usuario.estado === "ubicacion" &&
-      (
-        message.type === "location" ||
-        (message.type === "text" && texto.length > 5)
-      )
-    ) {
-
-      usuario.estado = "registrado";
-
-      await enviarTexto(
-        from,
-        `✅ Solicitud recibida.
-
-Estamos buscando un conductor disponible cerca de tu ubicación.
-
-Te notificaremos cuando un conductor acepte el servicio.`
-      );
-
-      return res.sendStatus(200);
-    }
-
-    return res.sendStatus(200);
-
-  } catch (error) {
-
-    console.error(
-      error.response?.data || error.message
-    );
-
-    return res.sendStatus(200);
-  }
-});
-
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log(
-    `Servidor ejecutándose en puerto ${PORT}`
-  );
-});
+      await
