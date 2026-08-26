@@ -111,7 +111,7 @@ app.post("/webhook", async (req, res) => {
   try {
 
     const message =
-      req.body?.entry?.["hub.challenge")[0]?.changes?.[0]?.[0];
+      req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
 
     if (!message) {
       return res.sendStatus(200);
