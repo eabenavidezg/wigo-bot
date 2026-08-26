@@ -11,6 +11,10 @@ const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 
 const usuarios = {};
 
+// =========================
+// ENVIO DE MENSAJES
+// =========================
+
 async function enviarTexto(destino, mensaje) {
   await axios.post(
     `https://graph.facebook.com/v23.0/${PHONE_NUMBER_ID}/messages`,
@@ -31,6 +35,37 @@ async function enviarTexto(destino, mensaje) {
   );
 }
 
+async function enviarBotones(destino, mensaje, botones) {
+  await axios.post(
+    `https://graph.facebook.com/v23.0/${PHONE_NUMBER_ID}/messages`,
+    {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: destino,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: {
+          text: mensaje
+        },
+        action: {
+          buttons: botones
+        }
+      }
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${TOKEN}`,
+        "Content-Type": "application/json"
+      }
+    }
+  );
+}
+
+// =========================
+// WEBHOOK
+// =========================
+
 app.get("/", (req, res) => {
   res.send("WIGO Bot funcionando 🚖");
 });
@@ -44,11 +79,12 @@ app.get("/webhook", (req, res) => {
     return res.status(200).send(challenge);
   }
 
-  res.sendStatus(403);
+  return res.sendStatus(403);
 });
 
 app.post("/webhook", async (req, res) => {
   try {
+
     const message =
       req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
 
@@ -58,26 +94,137 @@ app.post("/webhook", async (req, res) => {
 
     const from = message.from;
 
+    if (!usuarios[from]) {
+      usuarios[from] = {
+        estado: "nuevo"
+      };
+    }
+
+    const usuario = usuarios[from];
+
     let texto = "";
 
     if (message.type === "text") {
       texto = message.text.body.trim();
     }
 
-    if (!usuarios[from]) {
-      usuarios[from] = {
-        estado: "nombre"
-      };
+    let botonId = "";
+
+    if (
+      message.type === "interactive" &&
+      message.interactive?.button_reply
+    ) {
+      botonId = message.interactive.button_reply.id;
+    }
+
+    // =========================
+    // INICIO
+    // =========================
+
+    if (usuario.estado === "nuevo") {
+
+      usuario.estado = "esperando_contacto";
+
+      await enviarBotones(
+        from,
+        `Para brindarte una mejor atención, compártenos tu número de contacto para identificarte, conservar tu historial y gestionar tus solicitudes.
+
+Tus datos serán tratados únicamente para la prestación de nuestros servicios, de acuerdo con nuestra política de tratamiento de datos personales.`,
+        [
+          {
+            type: "reply",
+            reply: {
+              id: "CONTACTO",
+              title: "👤 Compartir contacto"
+            }
+          }
+        ]
+      );
+
+      return res.sendStatus(200);
+    }
+
+    // =========================
+    // COMPARTIR CONTACTO
+    // =========================
+
+    if (
+      usuario.estado === "esperando_contacto" &&
+      (
+        botonId === "CONTACTO" ||
+        message.type === "contacts"
+      )
+    ) {
+
+      usuario.estado = "registrarme";
+
+      await enviarBotones(
+        from,
+        `🚖 Bienvenido(a)
+
+Con WIGO moverte vuelve a sentirse fácil.
+
+Todo empieza con un mensaje.`,
+        [
+          {
+            type: "reply",
+            reply: {
+              id: "REGISTRARME",
+              title: "📝 Registrarme"
+            }
+          }
+        ]
+      );
+
+      return res.sendStatus(200);
+    }
+
+    // =========================
+    // REGISTRARME
+    // =========================
+
+    if (
+      usuario.estado === "registrarme" &&
+      botonId === "REGISTRARME"
+    ) {
+
+      usuario.estado = "terminos";
+
+      await enviarBotones(
+        from,
+        `🔒 Protegemos tu información y respetamos tu privacidad.
+
+Puedes revisar nuestros términos y políticas de uso antes de continuar.
+
+Confirma para seguir.`,
+        [
+          {
+            type: "reply",
+            reply: {
+              id: "ACEPTO",
+              title: "✅ Acepto"
+            }
+          }
+        ]
+      );
+
+      return res.sendStatus(200);
+    }
+
+    // =========================
+    // ACEPTO
+    // =========================
+
+    if (
+      usuario.estado === "terminos" &&
+      botonId === "ACEPTO"
+    ) {
+
+      usuario.estado = "nombre";
 
       await enviarTexto(
         from,
-        `🚖 Bienvenido(a) a WIGO
-
-Moverte vuelve a ser fácil.
-
-Antes de continuar necesitamos conocerte.
-
-👋 ¿Cómo te llamas?
+        `✍️ ¿Cómo te llamas?
 
 Escribe tu nombre y apellido.`
       );
@@ -85,85 +232,124 @@ Escribe tu nombre y apellido.`
       return res.sendStatus(200);
     }
 
-    const usuario = usuarios[from];
+    // =========================
+    // NOMBRE
+    // =========================
 
     if (
-      texto.toLowerCase() === "cancelar"
+      usuario.estado === "nombre" &&
+      message.type === "text"
     ) {
-      usuario.estado = "registrado";
 
-      await enviarTexto(
-        from,
-        `✅ Operación cancelada.
-
-Cuando necesites un vehículo nuevamente escribe:
-
-PEDIR SERVICIO`
-      );
-
-      return res.sendStatus(200);
-    }
-
-    if (usuario.estado === "nombre") {
       usuario.nombre = texto;
-      usuario.estado = "terminos";
+      usuario.estado = "ciudad";
 
-      await enviarTexto(
+      await enviarBotones(
         from,
-        `🔒 Al continuar aceptas nuestros términos de uso y política de tratamiento de datos.
-
-Escribe:
-
-ACEPTO`
+        "📍 ¿En qué ciudad te encuentras?",
+        [
+          {
+            type: "reply",
+            reply: {
+              id: "FUSAGASUGA",
+              title: "Fusagasugá"
+            }
+          }
+        ]
       );
 
       return res.sendStatus(200);
     }
 
+    // =========================
+    // CIUDAD
+    // =========================
+
     if (
-      usuario.estado === "terminos" &&
-      texto.toLowerCase() === "acepto"
+      usuario.estado === "ciudad" &&
+      botonId === "FUSAGASUGA"
     ) {
+
+      usuario.ciudad = "Fusagasugá";
       usuario.estado = "registrado";
 
-      await enviarTexto(
+      await enviarBotones(
         from,
         `🚀 ¡Todo listo para empezar!
 
-${usuario.nombre}, ya puedes solicitar tu primer servicio desde WhatsApp.
+${usuario.nombre}, ya puedes solicitar tu primer viaje o servicio desde WhatsApp.
 
-Escribe:
+Invita a quienes conozcas y ayúdales a descubrir lo fácil que es moverse con WIGO.
 
-PEDIR SERVICIO`
+Escribe "Menú" para ver más opciones.`,
+        [
+          {
+            type: "reply",
+            reply: {
+              id: "PEDIR_SERVICIO",
+              title: "🚖 Pedir servicio"
+            }
+          }
+        ]
       );
 
       return res.sendStatus(200);
     }
 
+    // =========================
+    // PEDIR SERVICIO
+    // =========================
+
     if (
       usuario.estado === "registrado" &&
-      texto.toLowerCase() === "pedir servicio"
+      botonId === "PEDIR_SERVICIO"
     ) {
+
       usuario.estado = "ubicacion";
 
       await enviarTexto(
         from,
         `📍 ¿Dónde te recogemos?
 
-Por favor comparte tu ubicación actual o escribe una dirección.
+Por favor envía tu ubicación actual o comparte una dirección.
 
-También puedes escribir:
-
-CANCELAR`
+Si no estás listo(a), escribe "Cancelar".`
       );
 
       return res.sendStatus(200);
     }
 
+    // =========================
+    // CANCELAR
+    // =========================
+
     if (
       usuario.estado === "ubicacion" &&
-      (message.type === "location" || texto.length > 5)
+      texto.toLowerCase() === "cancelar"
     ) {
+
+      usuario.estado = "registrado";
+
+      await enviarTexto(
+        from,
+        "✅ Solicitud cancelada."
+      );
+
+      return res.sendStatus(200);
+    }
+
+    // =========================
+    // UBICACION O DIRECCION
+    // =========================
+
+    if (
+      usuario.estado === "ubicacion" &&
+      (
+        message.type === "location" ||
+        (message.type === "text" && texto.length > 5)
+      )
+    ) {
+
       usuario.estado = "registrado";
 
       await enviarTexto(
@@ -178,26 +364,22 @@ Te notificaremos cuando un conductor acepte el servicio.`
       return res.sendStatus(200);
     }
 
-    if (usuario.estado === "registrado") {
-      await enviarTexto(
-        from,
-        `🚖 Bienvenido nuevamente ${usuario.nombre}.
+    return res.sendStatus(200);
 
-Escribe:
-
-PEDIR SERVICIO`
-      );
-    }
-
-    res.sendStatus(200);
   } catch (error) {
-    console.error(error.response?.data || error.message);
-    res.sendStatus(200);
+
+    console.error(
+      error.response?.data || error.message
+    );
+
+    return res.sendStatus(200);
   }
 });
 
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`Servidor ejecutándose en puerto ${PORT}`);
+  console.log(
+    `Servidor ejecutándose en puerto ${PORT}`
+  );
 });
