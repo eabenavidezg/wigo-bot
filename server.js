@@ -111,7 +111,7 @@ app.post("/webhook", async (req, res) => {
   try {
 
     const message =
-      req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+      req.body?.entry?.["hub.challenge")[0]?.changes?.[0]?.[0];
 
     if (!message) {
       return res.sendStatus(200);
@@ -142,14 +142,8 @@ app.post("/webhook", async (req, res) => {
       botonId = message.interactive.button_reply.id;
     }
 
-    const esMenu =
-      message.type === "text" &&
-      ["hola", "menu", "menú"].includes(
-        texto.toLowerCase()
-      );
-
     // =========================
-    // NUEVO USUARIO
+    // USUARIO NUEVO
     // =========================
 
     if (usuario.estado === "nuevo") {
@@ -208,7 +202,7 @@ Confirma para seguir.`,
     }
 
     // =========================
-    // ACEPTAR TERMINOS
+    // TERMINOS
     // =========================
 
     if (
@@ -241,3 +235,222 @@ Escribe tu nombre y apellido.`
 
       usuario.estado = "ciudad";
 
+      await enviarBotones(
+        from,
+        "📍 ¿En qué ciudad te encuentras?",
+        [
+          {
+            type: "reply",
+            reply: {
+              id: "FUSAGASUGA",
+              title: "Fusagasugá"
+            }
+          }
+        ]
+      );
+
+      return res.sendStatus(200);
+    }
+
+    // =========================
+    // CIUDAD
+    // =========================
+
+    if (
+      usuario.estado === "ciudad" &&
+      botonId === "FUSAGASUGA"
+    ) {
+
+      usuario.ciudad = "Fusagasugá";
+
+      usuario.estado = "registrado";
+
+      await enviarBotones(
+        from,
+        `🚀 ¡Todo listo para empezar!
+
+${usuario.nombre}, ya puedes solicitar tu primer viaje o servicio desde WhatsApp.`,
+        [
+          {
+            type: "reply",
+            reply: {
+              id: "PEDIR_SERVICIO",
+              title: "🚖 Pedir servicio"
+            }
+          }
+        ]
+      );
+
+      return res.sendStatus(200);
+    }
+
+    // =========================
+    // MENU
+    // =========================
+
+    if (
+      usuario.estado === "registrado" &&
+      message.type === "text" &&
+      (
+        texto.toLowerCase() === "hola" ||
+        texto.toLowerCase() === "menu" ||
+        texto.toLowerCase() === "menú"
+      )
+    ) {
+
+      await enviarBotones(
+        from,
+        `👋 Bienvenido nuevamente ${usuario.nombre}.
+
+¿Qué deseas hacer hoy?`,
+        [
+          {
+            type: "reply",
+            reply: {
+              id: "PEDIR_SERVICIO",
+              title: "🚖 Pedir servicio"
+            }
+          },
+          {
+            type: "reply",
+            reply: {
+              id: "MIS_SOLICITUDES",
+              title: "📖 Mis solicitudes"
+            }
+          },
+          {
+            type: "reply",
+            reply: {
+              id: "AYUDA",
+              title: "🆘 Ayuda"
+            }
+          }
+        ]
+      );
+
+      return res.sendStatus(200);
+    }
+
+    // =========================
+    // MIS SOLICITUDES
+    // =========================
+
+    if (
+      usuario.estado === "registrado" &&
+      botonId === "MIS_SOLICITUDES"
+    ) {
+
+      await enviarTexto(
+        from,
+        `📖 Mis solicitudes
+
+Último destino registrado:
+
+${usuario.destino || "Sin solicitudes registradas"}`
+      );
+
+      return res.sendStatus(200);
+    }
+
+    // =========================
+    // AYUDA
+    // =========================
+
+    if (
+      usuario.estado === "registrado" &&
+      botonId === "AYUDA"
+    ) {
+
+      await enviarTexto(
+        from,
+        `🆘 Soporte WIGO
+
+Si necesitas ayuda con tu solicitud, comunícate con nuestro equipo de atención.`
+      );
+
+      return res.sendStatus(200);
+    }
+
+    // =========================
+    // PEDIR SERVICIO
+    // =========================
+
+    if (
+      usuario.estado === "registrado" &&
+      botonId === "PEDIR_SERVICIO"
+    ) {
+
+      usuario.estado = "ubicacion";
+
+      await solicitarUbicacion(from);
+
+      return res.sendStatus(200);
+    }
+
+    // =========================
+    // UBICACION
+    // =========================
+
+    if (
+      usuario.estado === "ubicacion" &&
+      message.type === "location"
+    ) {
+
+      usuario.latitud = message.location.latitude;
+      usuario.longitud = message.location.longitude;
+
+      usuario.estado = "destino";
+
+      await enviarTexto(
+        from,
+        "📍 ¿Cuál es tu destino?"
+      );
+
+      return res.sendStatus(200);
+    }
+
+    // =========================
+    // DESTINO
+    // =========================
+
+    if (
+      usuario.estado === "destino" &&
+      message.type === "text"
+    ) {
+
+      usuario.destino = texto;
+
+      usuario.estado = "registrado";
+
+      await enviarTexto(
+        from,
+        `✅ ¡Perfecto!
+
+Hemos recibido tu solicitud de transporte.
+
+📍 Recogida: Ubicación compartida
+📍 Destino: ${usuario.destino}
+
+Estamos buscando un conductor disponible cerca de tu ubicación.
+
+Te notificaremos cuando uno de nuestros conductores acepte el servicio.`
+      );
+
+      return res.sendStatus(200);
+    }
+
+    return res.sendStatus(200);
+
+  } catch (error) {
+
+    console.error(error.response?.data || error.message);
+
+    return res.sendStatus(200);
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Servidor ejecutándose en puerto ${PORT}`);
+});
