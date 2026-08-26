@@ -11,12 +11,8 @@ const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 
 const usuarios = {};
 
-// =========================
-// MENSAJES
-// =========================
-
 async function enviarTexto(destino, mensaje) {
-  await axios.post(
+  return axios.post(
     `https://graph.facebook.com/v23.0/${PHONE_NUMBER_ID}/messages`,
     {
       messaging_product: "whatsapp",
@@ -36,11 +32,10 @@ async function enviarTexto(destino, mensaje) {
 }
 
 async function enviarBotones(destino, mensaje, botones) {
-  await axios.post(
+  return axios.post(
     `https://graph.facebook.com/v23.0/${PHONE_NUMBER_ID}/messages`,
     {
       messaging_product: "whatsapp",
-      recipient_type: "individual",
       to: destino,
       type: "interactive",
       interactive: {
@@ -63,17 +58,16 @@ async function enviarBotones(destino, mensaje, botones) {
 }
 
 async function solicitarUbicacion(destino) {
-  await axios.post(
+  return axios.post(
     `https://graph.facebook.com/v23.0/${PHONE_NUMBER_ID}/messages`,
     {
       messaging_product: "whatsapp",
-      recipient_type: "individual",
       to: destino,
       type: "interactive",
       interactive: {
         type: "location_request_message",
         body: {
-          text: "📍 ¿Dónde te recogemos?\n\nComparte tu ubicación para continuar con tu solicitud."
+          text: "📍 ¿Dónde te recogemos?"
         },
         action: {
           name: "send_location"
@@ -89,10 +83,6 @@ async function solicitarUbicacion(destino) {
   );
 }
 
-// =========================
-// WEBHOOK
-// =========================
-
 app.get("/", (req, res) => {
   res.send("WIGO Bot funcionando 🚖");
 });
@@ -102,7 +92,7 @@ app.get("/webhook", (req, res) => {
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
-  if (mode && token === VERIFY_TOKEN) {
+  if (mode === "subscribe" && token === VERIFY_TOKEN) {
     return res.status(200).send(challenge);
   }
 
@@ -111,7 +101,6 @@ app.get("/webhook", (req, res) => {
 
 app.post("/webhook", async (req, res) => {
   try {
-
     const message =
       req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
 
@@ -144,9 +133,7 @@ app.post("/webhook", async (req, res) => {
       botonId = message.interactive.button_reply.id;
     }
 
-    // =========================
-    // INICIO
-    // =========================
+    // NUEVO USUARIO
 
     if (usuario.estado === "nuevo") {
 
@@ -154,9 +141,7 @@ app.post("/webhook", async (req, res) => {
 
       await enviarBotones(
         from,
-        `Para brindarte una mejor atención, compártenos tu número de contacto para identificarte, conservar tu historial y gestionar tus solicitudes.
-
-Tus datos serán tratados únicamente para la prestación de nuestros servicios, de acuerdo con nuestra política de tratamiento de datos personales.`,
+        "Para brindarte una mejor atención, compártenos tu número de contacto para identificarte, conservar tu historial y gestionar tus solicitudes.",
         [
           {
             type: "reply",
@@ -171,9 +156,7 @@ Tus datos serán tratados únicamente para la prestación de nuestros servicios,
       return res.sendStatus(200);
     }
 
-    // =========================
     // CONTACTO
-    // =========================
 
     if (
       usuario.estado === "esperando_contacto" &&
@@ -206,9 +189,7 @@ Todo empieza con un mensaje.`,
       return res.sendStatus(200);
     }
 
-    // =========================
-    // REGISTRO
-    // =========================
+    // REGISTRARME
 
     if (
       usuario.estado === "registrarme" &&
@@ -220,8 +201,6 @@ Todo empieza con un mensaje.`,
       await enviarBotones(
         from,
         `🔒 Protegemos tu información y respetamos tu privacidad.
-
-Puedes revisar nuestros términos y políticas de uso antes de continuar.
 
 Confirma para seguir.`,
         [
@@ -238,9 +217,7 @@ Confirma para seguir.`,
       return res.sendStatus(200);
     }
 
-    // =========================
-    // TERMINOS
-    // =========================
+    // ACEPTA TERMINOS
 
     if (
       usuario.estado === "terminos" &&
@@ -259,9 +236,7 @@ Escribe tu nombre y apellido.`
       return res.sendStatus(200);
     }
 
-    // =========================
     // NOMBRE
-    // =========================
 
     if (
       usuario.estado === "nombre" &&
@@ -269,6 +244,7 @@ Escribe tu nombre y apellido.`
     ) {
 
       usuario.nombre = texto;
+
       usuario.estado = "ciudad";
 
       await enviarBotones(
@@ -288,9 +264,7 @@ Escribe tu nombre y apellido.`
       return res.sendStatus(200);
     }
 
-    // =========================
     // CIUDAD
-    // =========================
 
     if (
       usuario.estado === "ciudad" &&
@@ -298,17 +272,14 @@ Escribe tu nombre y apellido.`
     ) {
 
       usuario.ciudad = "Fusagasugá";
+
       usuario.estado = "registrado";
 
       await enviarBotones(
         from,
         `🚀 ¡Todo listo para empezar!
 
-${usuario.nombre}, ya puedes solicitar tu primer viaje o servicio desde WhatsApp.
-
-Invita a quienes conozcas y ayúdales a descubrir lo fácil que es moverse con WIGO.
-
-Escribe "Menú" para ver más opciones.`,
+${usuario.nombre}, ya puedes solicitar tu primer viaje o servicio desde WhatsApp.`,
         [
           {
             type: "reply",
@@ -323,9 +294,7 @@ Escribe "Menú" para ver más opciones.`,
       return res.sendStatus(200);
     }
 
-    // =========================
     // PEDIR SERVICIO
-    // =========================
 
     if (
       usuario.estado === "registrado" &&
@@ -334,4 +303,72 @@ Escribe "Menú" para ver más opciones.`,
 
       usuario.estado = "ubicacion";
 
-      await
+      await solicitarUbicacion(from);
+
+      return res.sendStatus(200);
+    }
+
+    // UBICACION
+
+    if (
+      usuario.estado === "ubicacion" &&
+      message.type === "location"
+    ) {
+
+      usuario.latitud = message.location.latitude;
+      usuario.longitud = message.location.longitude;
+
+      usuario.estado = "destino";
+
+      await enviarTexto(
+        from,
+        "📍 ¿Cuál es tu destino?"
+      );
+
+      return res.sendStatus(200);
+    }
+
+    // DESTINO
+
+    if (
+      usuario.estado === "destino" &&
+      message.type === "text"
+    ) {
+
+      usuario.destino = texto;
+
+      usuario.estado = "registrado";
+
+      await enviarTexto(
+        from,
+        `✅ Solicitud registrada.
+
+Pasajero: ${usuario.nombre}
+
+Ciudad: ${usuario.ciudad}
+
+Destino: ${usuario.destino}
+
+Estamos buscando un conductor disponible.`
+      );
+
+      return res.sendStatus(200);
+    }
+
+    return res.sendStatus(200);
+
+  } catch (error) {
+
+    console.error(
+      error.response?.data || error.message
+    );
+
+    return res.sendStatus(200);
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Servidor ejecutándose en puerto ${PORT}`);
+});
