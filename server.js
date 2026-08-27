@@ -605,6 +605,25 @@ app.get("/", (req, res) => {
   res.send("🚖 WIGO ONLINE");
 });
 
+app.get("/db-check", async (req, res) => {
+  try {
+
+    const result = await pool.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'solicitudes'
+      ORDER BY ordinal_position
+    `);
+
+    res.json(result.rows);
+
+  } catch (error) {
+
+    res.status(500).json(error);
+
+  }
+});
+
 // =====================================
 // START
 // =====================================
