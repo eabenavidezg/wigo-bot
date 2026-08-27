@@ -28,7 +28,12 @@ async function initDatabase() {
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS usuarios (
-        ...
+        id SERIAL PRIMARY KEY,
+        telefono VARCHAR(30) UNIQUE NOT NULL,
+        nombre VARCHAR(150),
+        ciudad VARCHAR(100),
+        estado_registro VARCHAR(50) DEFAULT 'esperando_nombre',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
