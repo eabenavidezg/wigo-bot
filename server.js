@@ -19,46 +19,55 @@ const pool = new Pool({
   }
 });
 
-// =====================================
+// ======================================
 // DATABASE
-// =====================================
+// ======================================
 
 async function initDatabase() {
   try {
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS usuarios (
-        id SERIAL PRIMARY KEY,
-        telefono VARCHAR(30) UNIQUE NOT NULL,
-        nombre VARCHAR(150),
-        ciudad VARCHAR(100),
-        estado_registro VARCHAR(50) DEFAULT 'esperando_nombre',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
+        ...
+      );
     `);
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS solicitudes (
         id SERIAL PRIMARY KEY,
         usuario_id INTEGER REFERENCES usuarios(id),
-        origen_lat DECIMAL(12,8),
-        origen_lng DECIMAL(12,8),
-        destino TEXT,
-        estado VARCHAR(50) DEFAULT 'pendiente',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
+      );
     `);
 
-    console.log("✅ Base de datos inicializada");
+    await pool.query(`
+      ALTER TABLE solicitudes
+      ADD COLUMN IF NOT EXISTS origen_lat DECIMAL(12,8);
+    `);
+
+    await pool.query(`
+      ALTER TABLE solicitudes
+      ADD COLUMN IF NOT EXISTS origen_lng DECIMAL(12,8);
+    `);
+
+    await pool.query(`
+      ALTER TABLE solicitudes
+      ADD COLUMN IF NOT EXISTS destino TEXT;
+    `);
+
+    await pool.query(`
+      ALTER TABLE solicitudes
+      ADD COLUMN IF NOT EXISTS estado VARCHAR(50) DEFAULT 'pendiente';
+    `);
 
   } catch (error) {
-    console.error("❌ Error BD:", error);
+    console.error(error);
   }
 }
 
-// =====================================
-// WHATSAPP
-// =====================================
+// ======================================
+// WHATSAPP HELPERS
+// ======================================
 
 async function enviarTexto(to, body) {
   try {
