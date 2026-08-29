@@ -7,7 +7,6 @@ const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
@@ -15,637 +14,499 @@ const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false
-  }
+    rejectUnauthorized: false,
+  },
 });
 
-// ======================================
-// DATABASE
-// ======================================
-
 async function initDatabase() {
-  try {
+  const client = await pool.connect();
 
-    await pool.query(`
+  try {
+    await client.query(`
       CREATE TABLE IF NOT EXISTS usuarios (
         id SERIAL PRIMARY KEY,
         telefono VARCHAR(30) UNIQUE NOT NULL,
         nombre VARCHAR(150),
         ciudad VARCHAR(100),
-        estado_registro VARCHAR(50) DEFAULT 'esperando_nombre',
+        acepto_datos BOOLEAN DEFAULT FALSE,
+        fecha_aceptacion TIMESTAMP,
+        estado_registro VARCHAR(50),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
+      )
     `);
 
-    await pool.query(`
+    await client.query(`
+      ALTER TABLE usuarios
+      ADD COLUMN IF NOT EXISTS nombre VARCHAR(150)
+    `);
+
+    await client.query(`
+      ALTER TABLE usuarios
+      ADD COLUMN IF NOT EXISTS ciudad VARCHAR(100)
+    `);
+
+    await client.query(`
+      ALTER TABLE usuarios
+      ADD COLUMN IF NOT EXISTS acepto_datos BOOLEAN DEFAULT FALSE
+    `);
+
+    await client.query(`
+      ALTER TABLE usuarios
+      ADD COLUMN IF NOT EXISTS fecha_aceptacion TIMESTAMP
+    `);
+
+    await client.query(`
+      ALTER TABLE usuarios
+      ADD COLUMN IF NOT EXISTS estado_registro VARCHAR(50)
+    `);
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS solicitudes (
         id SERIAL PRIMARY KEY,
         usuario_id INTEGER REFERENCES usuarios(id),
+        origen_lat DECIMAL(12,8),
+        origen_lng DECIMAL(12,8),
+        destino TEXT,
+        estado VARCHAR(50) DEFAULT 'pendiente',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
+      )
     `);
 
-    await pool.query(`
+    await client.query(`
       ALTER TABLE solicitudes
-      ADD COLUMN IF NOT EXISTS origen_lat DECIMAL(12,8);
+      ADD COLUMN IF NOT EXISTS origen_lat DECIMAL(12,8)
     `);
 
-    await pool.query(`
+    await client.query(`
       ALTER TABLE solicitudes
-      ADD COLUMN IF NOT EXISTS origen_lng DECIMAL(12,8);
+      ADD COLUMN IF NOT EXISTS origen_lng DECIMAL(12,8)
     `);
 
-    await pool.query(`
+    await client.query(`
       ALTER TABLE solicitudes
-      ADD COLUMN IF NOT EXISTS destino TEXT;
+      ADD COLUMN IF NOT EXISTS destino TEXT
     `);
 
-    await pool.query(`
+    await client.query(`
       ALTER TABLE solicitudes
-      ADD COLUMN IF NOT EXISTS estado VARCHAR(50) DEFAULT 'pendiente';
+      ADD COLUMN IF NOT EXISTS estado VARCHAR(50) DEFAULT 'pendiente'
     `);
 
-  } catch (error) {
-    console.error(error);
+    console.log("Base de datos inicializada correctamente");
+  } finally {
+    client.release();
   }
 }
 
-// ======================================
-// WHATSAPP HELPERS
-// ======================================
-
-async function enviarTexto(to, body) {
+async function sendWhatsAppMessage(payload) {
   try {
-
     await axios.post(
-      `https://graph.facebook.com/v23.0/${PHONE_NUMBER_ID}/messages`,
-      {
-        messaging_product: "whatsapp",
-        to,
-        type: "text",
-        text: {
-          body
-        }
-      },
+      `https://graph.facebook.com/v21.0/${PHONE_NUMBER_ID}/messages`,
+      payload,
       {
         headers: {
           Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-          "Content-Type": "application/json"
-        }
+          "Content-Type": "application/json",
+        },
       }
     );
-
   } catch (error) {
-
     console.error(
-      "ERROR TEXTO:",
+      "META ERROR:",
       JSON.stringify(
         error.response?.data || error.message,
         null,
         2
       )
     );
-
+    throw error;
   }
 }
 
-async function enviarBotones(
-  to,
-  mensaje,
-  botones
-) {
-
-  try {
-
-    await axios.post(
-      `https://graph.facebook.com/v23.0/${PHONE_NUMBER_ID}/messages`,
-      {
-        messaging_product: "whatsapp",
-        to,
-        type: "interactive",
-        interactive: {
-          type: "button",
-          body: {
-            text: mensaje
-          },
-          action: {
-            buttons: botones
-          }
-        }
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-          "Content-Type": "application/json"
-        }
-      }
-    );
-
-  } catch (error) {
-
-    console.error(
-      "ERROR BOTONES:",
-      JSON.stringify(
-        error.response?.data || error.message,
-        null,
-        2
-      )
-    );
-
-  }
-
-}
-
-async function enviarMenu(
-  telefono,
-  nombre
-) {
-
-  return enviarBotones(
-    telefono,
-    `👋 Hola ${nombre}
-
-¿Qué deseas hacer hoy?`,
-    [
-      {
-        type: "reply",
-        reply: {
-          id: "SOLICITAR",
-          title: "🚖 Solicitar"
-        }
-      },
-      {
-        type: "reply",
-        reply: {
-          id: "HISTORIAL",
-          title: "📖 Historial"
-        }
-      },
-      {
-        type: "reply",
-        reply: {
-          id: "AYUDA",
-          title: "🆘 Ayuda"
-        }
-      }
-    ]
-  );
-
-}
-
-async function solicitarUbicacion(
-  telefono
-) {
-
-  try {
-
-    await axios.post(
-      `https://graph.facebook.com/v23.0/${PHONE_NUMBER_ID}/messages`,
-      {
-        messaging_product: "whatsapp",
-        to: telefono,
-        type: "interactive",
-        interactive: {
-          type: "location_request_message",
-          body: {
-            text: "📍 Comparte tu ubicación actual"
-          },
-          action: {
-            name: "send_location"
-          }
-        }
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-          "Content-Type": "application/json"
-        }
-      }
-    );
-
-  } catch (error) {
-
-    console.error(
-      "ERROR LOCATION:",
-      JSON.stringify(
-        error.response?.data || error.message,
-        null,
-        2
-      )
-    );
-
-    await enviarTexto(
-      telefono,
-      "📍 Comparte tu ubicación desde Adjuntar → Ubicación."
-    );
-
-  }
-
-}
-
-async function mostrarAyuda(
-  telefono
-) {
-
-  return enviarTexto(
-    telefono,
-    `🆘 Soporte WIGO
-
-Si necesitas ayuda responde este chat.`
-  );
-
-}
-
-async function mostrarHistorial(
-  usuarioId,
-  telefono
-) {
-
-  const result = await pool.query(
-    `
-    SELECT *
-    FROM solicitudes
-    WHERE usuario_id = $1
-    ORDER BY created_at DESC
-    LIMIT 5
-  `,
-    [usuarioId]
-  );
-
-  if (result.rows.length === 0) {
-
-    return enviarTexto(
-      telefono,
-      "📖 No tienes solicitudes registradas."
-    );
-
-  }
-
-  let mensaje =
-    "📖 Últimas solicitudes\n\n";
-
-  result.rows.forEach((s) => {
-
-    mensaje += `#${s.id}\n`;
-    mensaje += `Destino: ${s.destino || "Pendiente"}\n`;
-    mensaje += `Estado: ${s.estado}\n\n`;
-
+async function sendText(to, text) {
+  return sendWhatsAppMessage({
+    messaging_product: "whatsapp",
+    to,
+    type: "text",
+    text: {
+      body: text,
+    },
   });
-
-  await enviarTexto(
-    telefono,
-    mensaje
-  );
-
 }
 
-// =====================================
-// LOGICA
-// =====================================
+async function sendAcceptDataButton(to) {
+  return sendWhatsAppMessage({
+    messaging_product: "whatsapp",
+    to,
+    type: "interactive",
+    interactive: {
+      type: "button",
+      body: {
+        text:
+          "🚖 ¡Bienvenido a WIGO!\n\nAntes de continuar, necesitamos tu autorización para el tratamiento de tus datos personales con el fin de gestionar solicitudes de transporte y brindarte una mejor experiencia de servicio.\n\n¿Deseas continuar?",
+      },
+      action: {
+        buttons: [
+          {
+            type: "reply",
+            reply: {
+              id: "ACEPTAR_DATOS",
+              title: "✅ Aceptar",
+            },
+          },
+        ],
+      },
+    },
+  });
+}
 
-async function procesarMensaje(
-  message
-) {
+async function sendMainMenu(to, nombreCompleto) {
+  const primerNombre =
+    (nombreCompleto || "").trim().split(/\s+/)[0] || "Usuario";
 
-  const telefono = message.from;
+  return sendWhatsAppMessage({
+    messaging_product: "whatsapp",
+    to,
+    type: "interactive",
+    interactive: {
+      type: "button",
+      body: {
+        text: `👋 Hola, ${primerNombre}.\n🚖 ¿A dónde vamos hoy?`,
+      },
+      action: {
+        buttons: [
+          {
+            type: "reply",
+            reply: {
+              id: "SOLICITAR",
+              title: "🚖 Solicitar viaje",
+            },
+          },
+        ],
+      },
+    },
+  });
+}
 
+async function requestLocation(to) {
+  try {
+    await sendWhatsAppMessage({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "interactive",
+      interactive: {
+        type: "location_request_message",
+        body: {
+          text:
+            "📍 Comparte tu ubicación actual para encontrar conductores cercanos.",
+        },
+        action: {
+          name: "send_location",
+        },
+      },
+    });
+  } catch (error) {
+    await sendText(
+      to,
+      "📍 Comparte tu ubicación usando Adjuntar → Ubicación."
+    );
+  }
+}
+
+async function getUserByPhone(phone) {
   const result = await pool.query(
-    `
-    SELECT *
-    FROM usuarios
-    WHERE telefono = $1
-  `,
-    [telefono]
+    `SELECT * FROM usuarios WHERE telefono = $1`,
+    [phone]
   );
 
-  let usuario = result.rows[0];
+  return result.rows[0] || null;
+}
 
-  let texto = "";
-
-  if (message.text?.body) {
-    texto = message.text.body.trim();
-  }
-
-  // NUEVO USUARIO
-
-  if (!usuario) {
-
-    await pool.query(
-      `
-      INSERT INTO usuarios
-      (
+async function createUser(phone) {
+  const result = await pool.query(
+    `
+      INSERT INTO usuarios (
         telefono,
         estado_registro
       )
-      VALUES
-      (
-        $1,
-        'esperando_nombre'
-      )
+      VALUES ($1,'aceptacion_datos')
+      ON CONFLICT (telefono)
+      DO UPDATE SET telefono = EXCLUDED.telefono
+      RETURNING *
     `,
-      [telefono]
-    );
+    [phone]
+  );
 
-    return enviarTexto(
-      telefono,
-      `🚖 Bienvenido a WIGO
+  return result.rows[0];
+}
 
-Vamos a crear tu perfil.
-
-✍️ ¿Cuál es tu nombre completo?`
-    );
-
-  }
-
-  // NOMBRE
-
-  if (
-    usuario.estado_registro ===
-    "esperando_nombre"
-  ) {
-
+async function processInteractiveReply(user, from, replyId) {
+  if (replyId === "ACEPTAR_DATOS") {
     await pool.query(
       `
       UPDATE usuarios
-      SET nombre = $1,
-          estado_registro = 'esperando_ciudad'
-      WHERE telefono = $2
+      SET
+        acepto_datos = TRUE,
+        fecha_aceptacion = NOW(),
+        estado_registro = 'esperando_nombre'
+      WHERE id = $1
     `,
-      [texto, telefono]
+      [user.id]
     );
 
-    return enviarTexto(
-      telefono,
-      "🏙️ ¿En qué ciudad te encuentras?"
+    await sendText(
+      from,
+      "🛡️ Por tu seguridad y la de nuestros conductores, indícanos por favor tu nombre y apellido."
     );
 
+    return;
   }
 
-  // CIUDAD
-
-  if (
-    usuario.estado_registro ===
-    "esperando_ciudad"
-  ) {
-
-    await pool.query(
-      `
-      UPDATE usuarios
-      SET ciudad = $1,
-          estado_registro = 'completo'
-      WHERE telefono = $2
-    `,
-      [texto, telefono]
-    );
-
-    usuario.nombre = usuario.nombre || "Usuario";
-
-    return enviarMenu(
-      telefono,
-      usuario.nombre
-    );
-
+  if (replyId === "SOLICITAR") {
+    await requestLocation(from);
+    return;
   }
+}
 
-  // UBICACION
-
-  if (message.location) {
-
-    await pool.query(
-      `
-      INSERT INTO solicitudes
-      (
+async function processLocation(user, from, location) {
+  const result = await pool.query(
+    `
+      INSERT INTO solicitudes (
         usuario_id,
         origen_lat,
         origen_lng,
         estado
       )
-      VALUES
-      (
-        $1,
-        $2,
-        $3,
-        'esperando_destino'
-      )
+      VALUES ($1,$2,$3,'esperando_destino')
+      RETURNING id
     `,
-      [
-        usuario.id,
-        message.location.latitude,
-        message.location.longitude
-      ]
-    );
-
-    return enviarTexto(
-      telefono,
-      "📍 Ubicación recibida.\n\n¿Cuál es tu destino?"
-    );
-
-  }
-
-  // DESTINO
-
-  const pendiente = await pool.query(
-    `
-    SELECT *
-    FROM solicitudes
-    WHERE usuario_id = $1
-    AND estado = 'esperando_destino'
-    ORDER BY id DESC
-    LIMIT 1
-  `,
-    [usuario.id]
+    [
+      user.id,
+      location.latitude,
+      location.longitude,
+    ]
   );
 
-  if (
-    pendiente.rows.length > 0 &&
-    texto
-  ) {
+  if (result.rows.length > 0) {
+    await sendText(
+      from,
+      "✅ Ubicación recibida correctamente.\n📍 ¿Hacia dónde te diriges?"
+    );
+  }
+}
+
+async function processText(user, from, text) {
+  const estado = user.estado_registro || "";
+
+  if (estado === "aceptacion_datos") {
+    await sendAcceptDataButton(from);
+    return;
+  }
+
+  if (estado === "esperando_nombre") {
+    await pool.query(
+      `
+      UPDATE usuarios
+      SET
+        nombre = $1,
+        estado_registro = 'esperando_ciudad'
+      WHERE id = $2
+    `,
+      [text, user.id]
+    );
+
+    await sendText(
+      from,
+      "📍 ¿En qué ciudad deseas utilizar WIGO?"
+    );
+
+    return;
+  }
+
+  if (estado === "esperando_ciudad") {
+    await pool.query(
+      `
+      UPDATE usuarios
+      SET
+        ciudad = $1,
+        estado_registro = 'completo'
+      WHERE id = $2
+    `,
+      [text, user.id]
+    );
+
+    const updatedUser = await getUserByPhone(from);
+
+    await sendMainMenu(
+      from,
+      updatedUser.nombre
+    );
+
+    return;
+  }
+
+  const solicitudPendiente = await pool.query(
+    `
+      SELECT *
+      FROM solicitudes
+      WHERE usuario_id = $1
+      AND estado = 'esperando_destino'
+      ORDER BY id DESC
+      LIMIT 1
+    `,
+    [user.id]
+  );
+
+  if (solicitudPendiente.rows.length > 0) {
+    const solicitud = solicitudPendiente.rows[0];
 
     await pool.query(
       `
       UPDATE solicitudes
-      SET destino = $1,
-          estado = 'pendiente'
+      SET
+        destino = $1,
+        estado = 'pendiente'
       WHERE id = $2
     `,
-      [
-        texto,
-        pendiente.rows[0].id
-      ]
+      [text, solicitud.id]
     );
 
-    await enviarTexto(
-      telefono,
-      `✅ Solicitud registrada
-
-📍 Destino: ${texto}
-
-Estamos buscando un conductor disponible.`
+    await sendText(
+      from,
+      `✅ Solicitud registrada con éxito.\n\n📍 Origen: Ubicación compartida\n📍 Destino: ${text}\n\n⏳ Estamos buscando un conductor disponible.\nTe notificaremos cuando tu solicitud sea aceptada.`
     );
 
-    return enviarMenu(
-      telefono,
-      usuario.nombre
-    );
-
+    return;
   }
 
-  // BOTONES
-
-  if (
-    message.interactive?.button_reply
-  ) {
-
-    const id =
-      message.interactive.button_reply.id;
-
-    if (id === "SOLICITAR") {
-      return solicitarUbicacion(
-        telefono
-      );
-    }
-
-    if (id === "HISTORIAL") {
-      return mostrarHistorial(
-        usuario.id,
-        telefono
-      );
-    }
-
-    if (id === "AYUDA") {
-      return mostrarAyuda(
-        telefono
-      );
-    }
-
+  if (estado === "completo") {
+    await sendMainMenu(
+      from,
+      user.nombre
+    );
   }
-
-  return enviarMenu(
-    telefono,
-    usuario.nombre
-  );
-
 }
 
-// =====================================
-// WEBHOOK VERIFY
-// =====================================
+app.get("/", (req, res) => {
+  res.status(200).send("🚖 WIGO ONLINE");
+});
 
 app.get("/webhook", (req, res) => {
-
-  const mode =
-    req.query["hub.mode"];
-
-  const token =
-    req.query["hub.verify_token"];
-
-  const challenge =
-    req.query["hub.challenge"];
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
 
   if (
     mode === "subscribe" &&
     token === VERIFY_TOKEN
   ) {
-    return res
-      .status(200)
-      .send(challenge);
+    return res.status(200).send(challenge);
   }
 
   return res.sendStatus(403);
-
 });
 
-// =====================================
-// WEBHOOK EVENTS
-// =====================================
+app.post("/webhook", async (req, res) => {
+  try {
+    const entry =
+      req.body?.entry?.[0];
 
-app.post(
-  "/webhook",
-  async (req, res) => {
+    const change =
+      entry?.changes?.[0];
 
-    try {
+    const value =
+      change?.value;
 
-      const message =
-        req.body?.entry?.[0]
-          ?.changes?.[0]
-          ?.value?.messages?.[0];
+    const message =
+      value?.messages?.[0];
 
-      if (!message) {
-        return res.sendStatus(200);
-      }
-
-      console.log(
-        JSON.stringify(
-          message,
-          null,
-          2
-        )
-      );
-
-      await procesarMensaje(
-        message
-      );
-
+    if (!message) {
       return res.sendStatus(200);
-
-    } catch (error) {
-
-      console.error(
-        "ERROR WEBHOOK:",
-        error
-      );
-
-      return res.sendStatus(200);
-
     }
 
-  }
-);
-
-// =====================================
-// HOME
-// =====================================
-
-app.get("/", (req, res) => {
-  res.send("🚖 WIGO ONLINE");
-});
-
-app.get("/db-check", async (req, res) => {
-  try {
-
-    const result = await pool.query(`
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_name = 'solicitudes'
-      ORDER BY ordinal_position
-    `);
-
-    res.json(result.rows);
-
-  } catch (error) {
-
-    res.status(500).json(error);
-
-  }
-});
-
-// =====================================
-// START
-// =====================================
-
-initDatabase().then(() => {
-
-  console.log(
-    "PHONE_NUMBER_ID:",
-    PHONE_NUMBER_ID
-  );
-
-  app.listen(PORT, () => {
-
     console.log(
-      `🚀 WIGO ejecutándose en puerto ${PORT}`
+      JSON.stringify(
+        message,
+        null,
+        2
+      )
     );
 
-  });
+    const from = message.from;
 
+    let user = await getUserByPhone(from);
+
+    if (!user) {
+      user = await createUser(from);
+      await sendAcceptDataButton(from);
+      return res.sendStatus(200);
+    }
+
+    if (
+      message.type === "interactive" &&
+      message.interactive?.button_reply
+    ) {
+      await processInteractiveReply(
+        user,
+        from,
+        message.interactive.button_reply.id
+      );
+
+      return res.sendStatus(200);
+    }
+
+    if (
+      message.type === "location" &&
+      message.location
+    ) {
+      await processLocation(
+        user,
+        from,
+        message.location
+      );
+
+      return res.sendStatus(200);
+    }
+
+    if (
+      message.type === "text" &&
+      message.text?.body
+    ) {
+      await processText(
+        user,
+        from,
+        message.text.body.trim()
+      );
+
+      return res.sendStatus(200);
+    }
+
+    return res.sendStatus(200);
+  } catch (error) {
+    console.error(
+      "WEBHOOK ERROR:",
+      error
+    );
+
+    return res.sendStatus(500);
+  }
 });
+
+(async () => {
+  try {
+    await initDatabase();
+
+    app.listen(PORT, () => {
+      console.log(
+        `WIGO ejecutándose en puerto ${PORT}`
+      );
+    });
+  } catch (error) {
+    console.error(
+      "ERROR DE INICIO:",
+      error
+    );
+    process.exit(1);
+  }
+})();
