@@ -828,45 +828,43 @@ async function processDriver(driver, phone, message, value) {
   )
 ).rows[0];
 
-const mapsUrl = `https://www.google.com/maps?q=${req.origen_lat},${req.origen_lng}`;
+  const mapsUrl = `https://www.google.com/maps?q=${req.origen_lat},${req.origen_lng}`;
 
-await sendText(
+  await sendText(
   phone,
   `📍 Navegación al punto de recogida:
 
 ${mapsUrl}`
 );
 
-const user = (
+ const user = (
   await query(
     `SELECT * FROM usuarios WHERE id=$1`,
     [req.usuario_id]
   )
 ).rows[0];
 
-const vehicle = (
-  await query(
+  const vehicle = (
+    await query(
     `SELECT placa FROM vehiculos WHERE conductor_id=$1 LIMIT 1`,
     [driver.id]
   )
 ).rows[0];
 
-await sendText(
+  await sendText(
   user.telefono,
   `✅ Tu solicitud ha sido aceptada.
 
-👤 Conductor: ${driver.nombre}
-🔖 Placa: ${vehicle?.placa || "N/D"}
+  👤 Conductor: ${driver.nombre}
+  🔖 Placa: ${vehicle?.placa || "N/D"}
 
-🚖 El conductor se dirige hacia tu ubicación.`
+  🚖 El conductor se dirige hacia tu ubicación.`
 );
-`
 
-      await query(
+  await query(
   `UPDATE solicitudes SET estado='en_camino' WHERE id=$1`,
   [requestId]
 );
-      );
 
       return sendButtons(
         phone,
