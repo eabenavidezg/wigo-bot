@@ -766,32 +766,28 @@ async function processDriver(driver, phone, message, value) {
       return requestLocation(phone);
     }
 
-    if (message.location) {
-      await query(
-        `
-        UPDATE conductores
-        SET lat=$1,
-        lng=$2,
-        ultima_actualizacion=NOW()
-        WHERE id=$3
-        `,
-        [
-          message.location.latitude,
-          message.location.longitude,
-          driver.id
-        ]
-      );
+   if (message.location) {
 
-      return sendButtons(
-        phone,
-        "🚖 Panel del conductor",
-        [
-          { id: "DISPONIBLE", title: "🟢 Disponible" },
-          { id: "NO_DISPONIBLE", title: "🔴 No disponible" },
-          { id: "ACTUALIZAR_UBICACION", title: "📍 Ubicación" }
-        ]
-      );
-    }
+  await query(
+    `
+    UPDATE conductores
+    SET lat=$1,
+    lng=$2,
+    ultima_actualizacion=NOW()
+    WHERE id=$3
+    `,
+    [
+      message.location.latitude,
+      message.location.longitude,
+      driver.id
+    ]
+  );
+
+  return sendText(
+    phone,
+    "✅ Ubicación actualizada correctamente.\n🚖 Ya puedes recibir solicitudes."
+  );
+}
 
     if (value.startsWith("ACEPTAR_SERVICIO_")) {
       const requestId = value.split("_").pop();
