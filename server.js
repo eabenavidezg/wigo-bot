@@ -170,7 +170,79 @@ async function sendButtons(to, body, buttons) {
     }
   );
 }
+async function aprobarConductor(conductorId) {
 
+  await query(
+    `UPDATE conductores
+     SET estado_validacion='aprobado'
+     WHERE id=$1`,
+    [conductorId]
+  );
+
+  const conductor = (
+    await query(
+      `SELECT id,nombre,telefono
+       FROM conductores
+       WHERE id=$1`,
+      [conductorId]
+    )
+  ).rows[0];
+
+  if (!conductor) return false;
+
+  await sendButtons(
+    conductor.telefono,
+    `✅ Tu documentación ha sido aprobada.
+
+Bienvenido a WIGO Conductores.
+
+Ya puedes comenzar a recibir servicios.`,
+    [
+      {
+        id: "DISPONIBLE",
+        title: "Disponible"
+      },
+      {
+        id: "NO_DISPONIBLE",
+        title: "No disponible"
+      }
+    ]
+  );
+
+  return true;
+}
+
+async function rechazarConductor(conductorId, motivo = "") {
+
+  await query(
+    `UPDATE conductores
+     SET estado_validacion='rechazado'
+     WHERE id=$1`,
+    [conductorId]
+  );
+
+  const conductor = (
+    await query(
+      `SELECT telefono
+       FROM conductores
+       WHERE id=$1`,
+      [conductorId]
+    )
+  ).rows[0];
+
+  if (!conductor) return false;
+
+  await sendText(
+    conductor.telefono,
+    `❌ Tu documentación fue rechazada.
+
+${motivo}
+
+Por favor contacta soporte o realiza nuevamente el proceso de validación.`
+  );
+
+  return true;
+}
 async function requestLocation(to) {
   try {
     await axios.post(
@@ -884,7 +956,41 @@ return sendButtons(
   ]
 );
 }
+app.get("/admin/aprobar/:id", async (req, res) => {
 
+  try {
+
+    await aprobarConductor(req.params.id);
+
+    res.send(`Conductor ${req.params.id} aprobado correctamente`);
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).send("Error");
+
+  }
+
+});
+
+app.get("/admin/rechazar/:id", async (req, res) => {
+
+  try {
+
+    await rechazarConductor(req.params.id);
+
+    res.send(`Conductor ${req.params.id} rechazado correctamente`);
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).send("Error");
+
+  }
+
+});
 app.get("/", (req, res) => {
   res.send("🚖 WIGO ONLINE");
 });
