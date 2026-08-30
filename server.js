@@ -994,9 +994,7 @@ return sendButtons(
     { id: "NO_DISPONIBLE", title: "No disponible" },
     { id: "ACTUALIZAR_UBICACION", title: "Ubicacion" }
   ]
-);
-}
-
+  );
 }
 
 app.get("/admin/aprobar/:id", async (req, res) => {
