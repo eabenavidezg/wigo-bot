@@ -866,6 +866,23 @@ async function processDriver(driver, phone, message, value) {
       );
     }
   }
+    console.log("CONDUCTOR APROBADO - MOSTRANDO PANEL");
+
+console.log({
+  telefono: driver.telefono,
+  estado_registro: driver.estado_registro,
+  estado_validacion: driver.estado_validacion
+});
+
+return sendButtons(
+  phone,
+  "🚖 Panel del conductor",
+  [
+    { id: "DISPONIBLE", title: "Disponible" },
+    { id: "NO_DISPONIBLE", title: "No disponible" },
+    { id: "ACTUALIZAR_UBICACION", title: "Ubicacion" }
+  ]
+);
 }
 
 app.get("/", (req, res) => {
