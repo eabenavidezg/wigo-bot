@@ -594,7 +594,17 @@ async function processPassenger(user, phone, message, value) {
       `✅ Solicitud registrada con éxito.\n📍 Origen: Ubicación compartida\n📍 Destino: ${message.text.body}\n⏳ Estamos buscando un conductor disponible.\nTe notificaremos cuando tu solicitud sea aceptada.`
     );
 
-    return offerDrivers(req.id);
+        return offerDrivers(req.id);
+  }
+
+  if (user.estado_registro === "completo") {
+    return sendButtons(
+      phone,
+      `👋 Hola, ${firstName(user.nombre)}.\n🚖 ¿Qué deseas hacer?`,
+      [
+        { id: "SOLICITAR", title: "🚖 Viaje" }
+      ]
+    );
   }
 }
 
