@@ -822,7 +822,10 @@ async function processDriver(driver, phone, message, value) {
       }
 
       const req = (
-  await query(`SELECT * FROM solicitudes WHERE id=$1`, [requestId])
+  await query(
+    `SELECT * FROM solicitudes WHERE id=$1`,
+    [requestId]
+  )
 ).rows[0];
 
 const mapsUrl = `https://www.google.com/maps?q=${req.origen_lat},${req.origen_lng}`;
@@ -835,7 +838,10 @@ ${mapsUrl}`
 );
 
 const user = (
-  await query(`SELECT * FROM usuarios WHERE id=$1`, [req.usuario_id])
+  await query(
+    `SELECT * FROM usuarios WHERE id=$1`,
+    [req.usuario_id]
+  )
 ).rows[0];
 
 const vehicle = (
@@ -854,6 +860,7 @@ await sendText(
 
 🚖 El conductor se dirige hacia tu ubicación.`
 );
+`
 
       await query(
         `UPDATE solicitudes SET estado='en_camino' WHERE id=$1`,
