@@ -455,17 +455,27 @@ async function offerDrivers(requestId) {
   );
 
   for (const d of nearest) {
-    await sendButtons(
-      d.telefono,
-      `🚖 Nueva solicitud disponible\n📍 Recogida: ubicación compartida\n📍 Destino: ${req.destino}\n¿Deseas aceptar este servicio?`,
-      [
-        { id: `ACEPTAR_SERVICIO_${requestId}`, title: "✅ Aceptar" },
-        { id: `RECHAZAR_SERVICIO_${requestId}`, title: "❌ Rechazar" }
-      ]
-    );
-  }
-}
 
+  const mapsUrl = `https://www.google.com/maps?q=${req.origen_lat},${req.origen_lng}`;
+
+  await sendButtons(
+  d.telefono,
+  `🚖 Nueva solicitud disponible
+
+📍 Punto de recogida:
+${mapsUrl}
+
+📍 Destino:
+${req.destino}
+
+¿Deseas aceptar este servicio?`,
+  [
+    { id: `ACEPTAR_SERVICIO_${requestId}`, title: "✅ Aceptar" },
+    { id: `RECHAZAR_SERVICIO_${requestId}`, title: "❌ Rechazar" }
+  ]
+);
+
+}
 async function processPassenger(user, phone, message, value) {
   if (value === "ACEPTAR_DATOS") {
     await query(
@@ -812,24 +822,38 @@ async function processDriver(driver, phone, message, value) {
       }
 
       const req = (
-        await query(`SELECT * FROM solicitudes WHERE id=$1`, [requestId])
-      ).rows[0];
+  await query(`SELECT * FROM solicitudes WHERE id=$1`, [requestId])
+).rows[0];
 
-      const user = (
-        await query(`SELECT * FROM usuarios WHERE id=$1`, [req.usuario_id])
-      ).rows[0];
+const mapsUrl = `https://www.google.com/maps?q=${req.origen_lat},${req.origen_lng}`;
 
-      const vehicle = (
-        await query(
-          `SELECT placa FROM vehiculos WHERE conductor_id=$1 LIMIT 1`,
-          [driver.id]
-        )
-      ).rows[0];
+await sendText(
+  phone,
+  `📍 Navegación al punto de recogida:
 
-      await sendText(
-        user.telefono,
-        `✅ Tu solicitud ha sido aceptada.\n👤 Conductor: ${driver.nombre}\n🔖 Placa: ${vehicle?.placa || "N/D"}\n🚖 El conductor se dirige hacia tu ubicación.`
-      );
+${mapsUrl}`
+);
+
+const user = (
+  await query(`SELECT * FROM usuarios WHERE id=$1`, [req.usuario_id])
+).rows[0];
+
+const vehicle = (
+  await query(
+    `SELECT placa FROM vehiculos WHERE conductor_id=$1 LIMIT 1`,
+    [driver.id]
+  )
+).rows[0];
+
+await sendText(
+  user.telefono,
+  `✅ Tu solicitud ha sido aceptada.
+
+👤 Conductor: ${driver.nombre}
+🔖 Placa: ${vehicle?.placa || "N/D"}
+
+🚖 El conductor se dirige hacia tu ubicación.`
+);
 
       await query(
         `UPDATE solicitudes SET estado='en_camino' WHERE id=$1`,
