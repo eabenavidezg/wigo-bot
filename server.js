@@ -190,26 +190,33 @@ async function aprobarConductor(conductorId) {
 
   if (!conductor) return false;
 
-  await sendButtons(
-    conductor.telefono,
-    `✅ Tu documentación ha sido aprobada.
+console.log("APROBANDO CONDUCTOR");
+console.log(conductor);
+
+console.log("ENVIANDO WHATSAPP APROBACION");
+
+await sendButtons(
+  conductor.telefono,
+  `✅ Tu documentación ha sido aprobada.
 
 Bienvenido a WIGO Conductores.
 
 Ya puedes comenzar a recibir servicios.`,
-    [
-      {
-        id: "DISPONIBLE",
-        title: "Disponible"
-      },
-      {
-        id: "NO_DISPONIBLE",
-        title: "No disponible"
-      }
-    ]
-  );
+  [
+    {
+      id: "DISPONIBLE",
+      title: "Disponible"
+    },
+    {
+      id: "NO_DISPONIBLE",
+      title: "No disponible"
+    }
+  ]
+);
 
-  return true;
+console.log("WHATSAPP APROBACION ENVIADO");
+
+return true;
 }
 
 async function rechazarConductor(conductorId, motivo = "") {
