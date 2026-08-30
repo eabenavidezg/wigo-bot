@@ -863,8 +863,9 @@ await sendText(
 `
 
       await query(
-        `UPDATE solicitudes SET estado='en_camino' WHERE id=$1`,
-        [requestId]
+  `UPDATE solicitudes SET estado='en_camino' WHERE id=$1`,
+  [requestId]
+);
       );
 
       return sendButtons(
