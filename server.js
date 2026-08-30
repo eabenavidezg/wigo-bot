@@ -171,6 +171,7 @@ async function sendButtons(to, body, buttons) {
   );
 }
 async function aprobarConductor(conductorId) {
+  console.log("VERSION_DEBUG_20260829");
 
   await query(
     `UPDATE conductores
