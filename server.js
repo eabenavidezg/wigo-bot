@@ -182,21 +182,23 @@ async function aprobarConductor(conductorId) {
   );
 
   const conductor = (
-    await query(
-      `SELECT id,nombre,telefono
-       FROM conductores
-       WHERE id=$1`,
-      [conductorId]
-    )
-  ).rows[0];
+  await query(
+    `SELECT id,nombre,telefono
+     FROM conductores
+     WHERE id=$1`,
+    [conductorId]
+  )
+).rows[0];
 
-  if (!conductor) return false;
+console.log("CONDUCTOR OBTENIDO:");
+console.log(conductor);
+
+if (!conductor) return false;
 
 console.log("APROBANDO CONDUCTOR");
 console.log(conductor);
 
 console.log("ENVIANDO WHATSAPP APROBACION");
-
 await sendButtons(
   conductor.telefono,
   `✅ Tu documentación ha sido aprobada.
