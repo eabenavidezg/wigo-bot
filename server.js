@@ -993,8 +993,10 @@ return sendButtons(
   ]
 );
 }
-app.get("/admin/aprobar/:id", async (req, res) => {
 
+}
+
+app.get("/admin/aprobar/:id", async (req, res) => {
   try {
 
     await aprobarConductor(req.params.id);
