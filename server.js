@@ -473,9 +473,12 @@ ${req.destino}
     { id: `ACEPTAR_SERVICIO_${requestId}`, title: "✅ Aceptar" },
     { id: `RECHAZAR_SERVICIO_${requestId}`, title: "❌ Rechazar" }
   ]
-);
+  );
+
+  }
 
 }
+
 async function processPassenger(user, phone, message, value) {
   if (value === "ACEPTAR_DATOS") {
     await query(
