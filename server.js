@@ -851,20 +851,20 @@ ${mapsUrl}`
   )
 ).rows[0];
 
-  await sendText(
+ await sendText(
   user.telefono,
   `✅ Tu solicitud ha sido aceptada.
 
-  👤 Conductor: ${driver.nombre}
-  🔖 Placa: ${vehicle?.placa || "N/D"}
+👤 Conductor: ${driver.nombre}
+🚗 Placa: ${vehicle?.placa || "N/D"}
 
-  🚖 El conductor se dirige hacia tu ubicación.`
+🚖 El conductor se dirige hacia tu ubicación.`
 );
 
-  await query(
+await query(
   `UPDATE solicitudes SET estado='en_camino' WHERE id=$1`,
   [requestId]
-);
+); 
 
       return sendButtons(
         phone,
