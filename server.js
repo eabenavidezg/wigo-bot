@@ -1068,6 +1068,9 @@ app.post("/webhook", async (req, res) => {
 
     let profile = await getProfile(phone);
 
+      console.log("PROFILE:");
+      console.log(profile);
+
     if (!profile) {
       if (action === "REGISTRO_USUARIO") {
         await createUser(phone);
@@ -1081,22 +1084,29 @@ app.post("/webhook", async (req, res) => {
     }
 
     if (profile.type === "usuario") {
-      await processPassenger(
-        profile.data,
-        phone,
-        message,
-        action || ""
-      );
-    }
+
+  console.log("ENTRANDO A PASAJERO");
+
+  await processPassenger(
+    profile.data,
+    phone,
+    message,
+    action || ""
+  );
+}
+
 
     if (profile.type === "conductor") {
-      await processDriver(
-        profile.data,
-        phone,
-        message,
-        action || ""
-      );
-    }
+
+  console.log("ENTRANDO A CONDUCTOR");
+
+  await processDriver(
+    profile.data,
+    phone,
+    message,
+    action || ""
+  );
+}
 
     res.sendStatus(200);
   } catch (e) {
